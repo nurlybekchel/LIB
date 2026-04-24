@@ -27,3 +27,8 @@ app.get('*any', (req, res) => {
 app.listen(PORT, () => {
   console.log(`📚 Библиотека запущена: http://localhost:${PORT}`);
 });
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log("Server started");
+});
