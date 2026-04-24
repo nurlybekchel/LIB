@@ -1,0 +1,4 @@
+node_modules/
+frontend/uploads/
+backend/library.db
+.env

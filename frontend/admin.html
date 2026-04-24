@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Админ-панель — Библиотека</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; }
+
+    .admin-topbar {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .admin-topbar__logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .admin-topbar__right { display: flex; align-items: center; gap: 16px; }
+    .admin-topbar__user { color: var(--text-muted); font-size: 0.9rem; }
+
+    .admin-body { display: flex; min-height: calc(100vh - 60px); }
+
+    .admin-sidebar {
+      width: 220px;
+      background: var(--card-bg);
+      border-right: 1px solid var(--border);
+      padding: 24px 0;
+      flex-shrink: 0;
+    }
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 24px;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      transition: all 0.2s;
+      border-left: 3px solid transparent;
+      text-decoration: none;
+    }
+    .sidebar-item:hover { background: rgba(255,255,255,0.03); color: var(--text); }
+    .sidebar-item.active { background: rgba(212,175,55,0.08); color: var(--accent); border-left-color: var(--accent); }
+
+    .admin-main { flex: 1; padding: 32px; overflow-y: auto; }
+    .admin-section { display: none; }
+    .admin-section.active { display: block; }
+    .page-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.8rem;
+      margin: 0 0 24px 0;
+      color: var(--text);
+    }
+
+    /* ── DASHBOARD ── */
+    .dash-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .dash-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      text-align: center;
+    }
+    .dash-card__icon { font-size: 1.8rem; margin-bottom: 8px; }
+    .dash-card__value { font-size: 2rem; font-weight: 700; color: var(--accent); font-family: 'Playfair Display', serif; }
+    .dash-card__label { font-size: 0.82rem; color: var(--text-muted); margin-top: 4px; }
+
+    .dash-charts {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+    @media(max-width:900px){ .dash-charts { grid-template-columns: 1fr; } }
+    .chart-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+    }
+    .chart-card__title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+      margin: 0 0 20px 0;
+    }
+    .chart-wrap { position: relative; height: 220px; }
+
+    .dash-recent {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .dash-recent__title { font-size: 1rem; font-weight: 600; color: var(--text); margin: 0 0 16px 0; }
+    .recent-book-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+    .recent-book-item:last-child { border-bottom: none; }
+    .recent-book-item__title { font-weight: 500; color: var(--text); }
+    .recent-book-item__author { color: var(--text-muted); font-size: 0.82rem; }
+    .recent-book-item__badge {
+      font-size: 0.75rem;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: rgba(212,175,55,0.15);
+      color: var(--accent);
+    }
+
+    /* ── EDIT MODAL ── */
+    .edit-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.65);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .edit-overlay.open { display: flex; }
+    .edit-modal {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 32px;
+      width: 100%;
+      max-width: 580px;
+      max-height: 90vh;
+      overflow-y: auto;
+      position: relative;
+      color: #1a1a1a;
+    }
+    .edit-modal label { color: #444; font-size: 0.88rem; font-weight: 500; display: block; margin-bottom: 6px; }
+    .edit-modal input,
+    .edit-modal textarea,
+    .edit-modal select {
+      width: 100%;
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.95rem;
+      color: #1a1a1a;
+      font-family: 'Inter', sans-serif;
+    }
+    .edit-modal input:focus,
+    .edit-modal textarea:focus {
+      outline: none;
+      border-color: #c0932a;
+    }
+    .edit-modal__title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.4rem;
+      margin: 0 0 24px 0;
+      color: #1a1a1a;
+    }
+    .edit-modal__close {
+      position: absolute; top: 16px; right: 16px;
+      background: none; border: none;
+      color: #888; font-size: 1.2rem; cursor: pointer;
+    }
+    .edit-modal__close:hover { color: #333; }
+    .edit-form-group { margin-bottom: 16px; }
+    .edit-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .edit-pdf-area {
+      border: 2px dashed #ddd;
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      position: relative;
+      background: #fafafa;
+    }
+    .edit-pdf-area input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .edit-pdf-area__text { color: #888; font-size: 0.88rem; }
+    .edit-save-btn {
+      width: 100%;
+      padding: 14px;
+      background: #c0392b;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      font-family: 'Inter', sans-serif;
+    }
+    .edit-save-btn:hover { background: #a93226; }
+    .edit-msg { margin-top: 10px; font-size: 0.9rem; text-align: center; min-height: 20px; }
+    .edit-msg.success { color: #27ae60; }
+    .edit-msg.error { color: #e74c3c; }
+
+    /* ── AUTH GUARD ── */
+    .auth-guard {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      text-align: center;
+      gap: 16px;
+    }
+    .auth-guard.visible { display: flex; }
+    .auth-guard h2 { font-family: 'Playfair Display', serif; font-size: 2rem; color: var(--text); margin: 0; }
+    .auth-guard p { color: var(--text-muted); margin: 0; }
+  </style>
+</head>
+<body>
+
+<!-- AUTH GUARD -->
+<div class="auth-guard" id="auth-guard">
+  <div style="font-size:3rem">🔒</div>
+  <h2>Доступ запрещён</h2>
+  <p>Эта страница только для администраторов.</p>
+  <a href="/" class="btn btn--primary" style="margin-top:8px">На главную</a>
+</div>
+
+<!-- ADMIN PAGE -->
+<div id="admin-page" style="display:none">
+  <div class="admin-topbar">
+    <a href="/" class="admin-topbar__logo">📚 Библиотека — Админ</a>
+    <div class="admin-topbar__right">
+      <span class="admin-topbar__user" id="topbar-user"></span>
+      <button class="btn btn--outline btn--sm" onclick="logout()">Выйти</button>
+    </div>
+  </div>
+
+  <div class="admin-body">
+    <nav class="admin-sidebar">
+      <a class="sidebar-item active" data-section="dashboard" href="#">📊 Дашборд</a>
+      <a class="sidebar-item" data-section="books" href="#">📚 Книги</a>
+      <a class="sidebar-item" data-section="add-book" href="#">➕ Добавить книгу</a>
+      <a class="sidebar-item" data-section="users" href="#">👥 Пользователи</a>
+    </nav>
+
+    <main class="admin-main">
+
+      <!-- DASHBOARD -->
+      <div class="admin-section active" id="section-dashboard">
+        <h2 class="page-title">Дашборд</h2>
+        <div class="dash-grid" id="dash-stats"></div>
+        <div class="dash-charts">
+          <div class="chart-card">
+            <p class="chart-card__title">📚 Книги по жанрам</p>
+            <div class="chart-wrap"><canvas id="chart-genres"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <p class="chart-card__title">📊 Книги с PDF vs без PDF</p>
+            <div class="chart-wrap"><canvas id="chart-pdf"></canvas></div>
+          </div>
+        </div>
+        <div class="dash-recent">
+          <p class="dash-recent__title">🕐 Последние добавленные книги</p>
+          <div id="dash-recent-books"></div>
+        </div>
+      </div>
+
+      <!-- BOOKS -->
+      <div class="admin-section" id="section-books">
+        <h2 class="page-title">Управление книгами</h2>
+        <div id="admin-books-list"></div>
+      </div>
+
+      <!-- ADD BOOK -->
+      <div class="admin-section" id="section-add-book">
+        <h2 class="page-title">Добавить книгу</h2>
+        <div class="form-card">
+          <div class="form-group">
+            <label>Название *</label>
+            <input type="text" id="f-title" placeholder="Введите название" />
+          </div>
+          <div class="form-group">
+            <label>Автор *</label>
+            <input type="text" id="f-author" placeholder="Имя автора" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Жанр</label>
+              <input type="text" id="f-genre" placeholder="Фантастика, Классика..." />
+            </div>
+            <div class="form-group">
+              <label>Год</label>
+              <input type="number" id="f-year" placeholder="2024" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Описание</label>
+            <textarea id="f-desc" rows="4" placeholder="Краткое описание книги..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Ссылка на обложку (URL)</label>
+            <input type="text" id="f-cover" placeholder="https://..." />
+          </div>
+          <div class="form-group">
+            <label>PDF файл книги</label>
+            <div class="pdf-upload-area">
+              <input type="file" id="f-pdf" accept=".pdf" onchange="handlePdfSelect(this)" />
+              <div class="pdf-upload-label">
+                <span class="pdf-icon">📄</span>
+                <span id="pdf-upload-text">Нажмите чтобы выбрать PDF (до 50 МБ)</span>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn--primary btn--full" onclick="addBook()">Добавить книгу</button>
+          <p class="form-msg" id="form-msg"></p>
+        </div>
+      </div>
+
+      <!-- USERS -->
+      <div class="admin-section" id="section-users">
+        <h2 class="page-title">Пользователи</h2>
+        <div id="admin-users-list"></div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="edit-overlay" id="edit-overlay">
+  <div class="edit-modal">
+    <button class="edit-modal__close" onclick="closeEditModal()">✕</button>
+    <h3 class="edit-modal__title">✏️ Редактировать книгу</h3>
+    <input type="hidden" id="edit-id" />
+    <div class="edit-form-group">
+      <label>Название *</label>
+      <input type="text" id="edit-title" placeholder="Название книги" />
+    </div>
+    <div class="edit-form-group">
+      <label>Автор *</label>
+      <input type="text" id="edit-author" placeholder="Имя автора" />
+    </div>
+    <div class="edit-form-row">
+      <div>
+        <label>Жанр</label>
+        <input type="text" id="edit-genre" placeholder="Жанр" />
+      </div>
+      <div>
+        <label>Год</label>
+        <input type="number" id="edit-year" placeholder="Год" />
+      </div>
+    </div>
+    <div class="edit-form-group">
+      <label>Описание</label>
+      <textarea id="edit-desc" rows="4" placeholder="Описание..."></textarea>
+    </div>
+    <div class="edit-form-group">
+      <label>Ссылка на обложку (URL)</label>
+      <input type="text" id="edit-cover" placeholder="https://..." />
+    </div>
+    <div class="edit-form-group">
+      <label>Заменить PDF (необязательно)</label>
+      <div class="edit-pdf-area">
+        <input type="file" id="edit-pdf" accept=".pdf" onchange="handleEditPdfSelect(this)" />
+        <div class="pdf-icon" style="font-size:1.5rem;margin-bottom:6px">📄</div>
+        <div class="edit-pdf-area__text" id="edit-pdf-text">Выберите новый PDF (старый заменится)</div>
+      </div>
+    </div>
+    <button class="edit-save-btn" onclick="saveEdit()">💾 Сохранить изменения</button>
+    <p class="edit-msg" id="edit-msg"></p>
+  </div>
+</div>
+
+<script>
+const API = '/api/books';
+const AUTH_API = '/api/auth';
+const ADMIN_API = '/api/admin';
+let currentUser = null;
+let genreChart = null;
+let pdfChart = null;
+
+function getToken() { return localStorage.getItem('token'); }
+function authHeaders() {
+  const t = getToken();
+  return t ? { 'Authorization': `Bearer ${t}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
+}
+
+// ── INIT ──────────────────────────────────────────────
+async function init() {
+  const token = getToken();
+  if (!token) { showGuard(); return; }
+  try {
+    const res = await fetch(`${AUTH_API}/me`, { headers: authHeaders() });
+    if (!res.ok) { showGuard(); return; }
+    currentUser = await res.json();
+    if (currentUser.role !== 'admin') { showGuard(); return; }
+    showAdmin();
+  } catch { showGuard(); }
+}
+
+function showGuard() {
+  document.getElementById('auth-guard').classList.add('visible');
+}
+function showAdmin() {
+  document.getElementById('admin-page').style.display = 'block';
+  document.getElementById('topbar-user').textContent = `👤 ${currentUser.username}`;
+  loadDashboard();
+}
+function logout() {
+  localStorage.removeItem('token');
+  window.location.href = '/';
+}
+
+// ── SIDEBAR ───────────────────────────────────────────
+document.querySelectorAll('.sidebar-item').forEach(item => {
+  item.addEventListener('click', e => {
+    e.preventDefault();
+    const section = item.dataset.section;
+    document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+    document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
+    item.classList.add('active');
+    document.getElementById(`section-${section}`).classList.add('active');
+    if (section === 'dashboard') loadDashboard();
+    if (section === 'books') loadAdminBooks();
+    if (section === 'users') loadAdminUsers();
+  });
+});
+
+// ── DASHBOARD ─────────────────────────────────────────
+async function loadDashboard() {
+  await Promise.all([loadStats(), loadRecentBooks()]);
+}
+
+async function loadStats() {
+  const [statsRes, booksRes] = await Promise.all([
+    fetch(`${ADMIN_API}/stats`, { headers: authHeaders() }),
+    fetch(API, { headers: authHeaders() })
+  ]);
+  const s = await statsRes.json();
+  const books = await booksRes.json();
+
+  document.getElementById('dash-stats').innerHTML = `
+    <div class="dash-card"><div class="dash-card__icon">📚</div><div class="dash-card__value">${s.totalBooks}</div><div class="dash-card__label">Всего книг</div></div>
+    <div class="dash-card"><div class="dash-card__icon">📄</div><div class="dash-card__value">${s.booksWithPdf}</div><div class="dash-card__label">Книг с PDF</div></div>
+    <div class="dash-card"><div class="dash-card__icon">👥</div><div class="dash-card__value">${s.totalUsers}</div><div class="dash-card__label">Пользователей</div></div>
+    <div class="dash-card"><div class="dash-card__icon">📖</div><div class="dash-card__value">${s.totalBooks - s.booksWithPdf}</div><div class="dash-card__label">Без PDF</div></div>
+  `;
+
+  // Genre chart
+  const genreCounts = {};
+  books.forEach(b => { if (b.genre) genreCounts[b.genre] = (genreCounts[b.genre] || 0) + 1; });
+  const genreLabels = Object.keys(genreCounts);
+  const genreData = Object.values(genreCounts);
+  const colors = ['#c0932a','#e74c3c','#2ecc71','#3498db','#9b59b6','#e67e22','#1abc9c','#e91e63'];
+
+  if (genreChart) genreChart.destroy();
+  genreChart = new Chart(document.getElementById('chart-genres'), {
+    type: 'doughnut',
+    data: {
+      labels: genreLabels,
+      datasets: [{ data: genreData, backgroundColor: colors, borderWidth: 2, borderColor: '#2a2a2a' }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { color: '#aaa', font: { size: 12 }, boxWidth: 14, padding: 12 } }
+      }
+    }
+  });
+
+  // PDF vs no PDF chart
+  if (pdfChart) pdfChart.destroy();
+  pdfChart = new Chart(document.getElementById('chart-pdf'), {
+    type: 'bar',
+    data: {
+      labels: ['С PDF', 'Без PDF'],
+      datasets: [{
+        data: [s.booksWithPdf, s.totalBooks - s.booksWithPdf],
+        backgroundColor: ['#c0932a', '#555'],
+        borderRadius: 8,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { ticks: { color: '#aaa', stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+        x: { ticks: { color: '#aaa' }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+async function loadRecentBooks() {
+  const res = await fetch(API, { headers: authHeaders() });
+  const books = await res.json();
+  const recent = books.slice(0, 6);
+  document.getElementById('dash-recent-books').innerHTML = recent.map(b => `
+    <div class="recent-book-item">
+      <div>
+        <div class="recent-book-item__title">${b.title}</div>
+        <div class="recent-book-item__author">${b.author}</div>
+      </div>
+      <span class="recent-book-item__badge">${b.genre || 'Без жанра'}</span>
+    </div>
+  `).join('');
+}
+
+// ── BOOKS TABLE ───────────────────────────────────────
+async function loadAdminBooks() {
+  const res = await fetch(API, { headers: authHeaders() });
+  const books = await res.json();
+  document.getElementById('admin-books-list').innerHTML = `
+    <table class="admin-table">
+      <thead><tr>
+        <th>Название</th><th>Автор</th><th>Жанр</th><th>Год</th><th>PDF</th><th>Действия</th>
+      </tr></thead>
+      <tbody>
+        ${books.map(b => `
+          <tr>
+            <td><strong>${b.title}</strong></td>
+            <td>${b.author}</td>
+            <td>${b.genre || '—'}</td>
+            <td>${b.year || '—'}</td>
+            <td>${b.pdf_path
+              ? `<span class="badge-pdf" style="cursor:pointer" onclick="window.open('${b.pdf_path}','_blank')">📄 Открыть</span>`
+              : `<label class="upload-pdf-btn">📤 Загрузить<input type="file" accept=".pdf" style="display:none" onchange="uploadPdfForBook(${b.id}, this)"></label>`
+            }</td>
+            <td style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn btn--outline btn--sm" onclick="openEditModal(${b.id})">✏️ Изменить</button>
+              <button class="btn btn--danger btn--sm" onclick="deleteBook(${b.id})">Удалить</button>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+async function uploadPdfForBook(bookId, input) {
+  if (!input.files[0]) return;
+  const formData = new FormData();
+  formData.append('pdf', input.files[0]);
+  const res = await fetch(`${API}/${bookId}/pdf`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${getToken()}` },
+    body: formData
+  });
+  if (res.ok) { alert('PDF загружен!'); loadAdminBooks(); }
+  else { const d = await res.json(); alert(d.error); }
+}
+
+async function deleteBook(id) {
+  if (!confirm('Удалить книгу? Это действие необратимо.')) return;
+  await fetch(`${API}/${id}`, { method: 'DELETE', headers: authHeaders() });
+  loadAdminBooks();
+  loadStats();
+}
+
+// ── EDIT MODAL ────────────────────────────────────────
+async function openEditModal(id) {
+  const res = await fetch(`${API}/${id}`);
+  const b = await res.json();
+  document.getElementById('edit-id').value = b.id;
+  document.getElementById('edit-title').value = b.title || '';
+  document.getElementById('edit-author').value = b.author || '';
+  document.getElementById('edit-genre').value = b.genre || '';
+  document.getElementById('edit-year').value = b.year || '';
+  document.getElementById('edit-desc').value = b.description || '';
+  document.getElementById('edit-cover').value = b.cover_url || '';
+  document.getElementById('edit-pdf').value = '';
+  document.getElementById('edit-pdf-text').textContent = b.pdf_path
+    ? `Текущий: ${b.pdf_path.split('/').pop()} (выберите новый для замены)`
+    : 'Выберите новый PDF (старый заменится)';
+  document.getElementById('edit-msg').textContent = '';
+  document.getElementById('edit-msg').className = 'edit-msg';
+  document.getElementById('edit-overlay').classList.add('open');
+}
+
+function closeEditModal() {
+  document.getElementById('edit-overlay').classList.remove('open');
+}
+function handleEditPdfSelect(input) {
+  document.getElementById('edit-pdf-text').textContent = input.files[0]
+    ? `✓ ${input.files[0].name}`
+    : 'Выберите новый PDF (старый заменится)';
+}
+
+async function saveEdit() {
+  const id = document.getElementById('edit-id').value;
+  const title = document.getElementById('edit-title').value.trim();
+  const author = document.getElementById('edit-author').value.trim();
+  const genre = document.getElementById('edit-genre').value.trim();
+  const year = document.getElementById('edit-year').value;
+  const description = document.getElementById('edit-desc').value.trim();
+  const cover_url = document.getElementById('edit-cover').value.trim();
+  const pdfFile = document.getElementById('edit-pdf').files[0];
+  const msg = document.getElementById('edit-msg');
+
+  if (!title || !author) {
+    msg.textContent = 'Заполните название и автора';
+    msg.className = 'edit-msg error';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('title', title);
+  formData.append('author', author);
+  if (genre) formData.append('genre', genre);
+  if (year) formData.append('year', year);
+  if (description) formData.append('description', description);
+  if (cover_url) formData.append('cover_url', cover_url);
+  if (pdfFile) formData.append('pdf', pdfFile);
+
+  msg.textContent = 'Сохранение...';
+  msg.className = 'edit-msg';
+
+  const res = await fetch(`${API}/${id}`, {
+    method: 'PUT',
+    headers: { 'Authorization': `Bearer ${getToken()}` },
+    body: formData
+  });
+  const data = await res.json();
+  if (res.ok) {
+    msg.textContent = '✓ Изменения сохранены!';
+    msg.className = 'edit-msg success';
+    loadAdminBooks();
+    loadStats();
+    setTimeout(closeEditModal, 1000);
+  } else {
+    msg.textContent = data.error;
+    msg.className = 'edit-msg error';
+  }
+}
+
+document.getElementById('edit-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeEditModal();
+});
+
+// ── ADD BOOK ──────────────────────────────────────────
+function handlePdfSelect(input) {
+  document.getElementById('pdf-upload-text').textContent = input.files[0]
+    ? `✓ ${input.files[0].name}`
+    : 'Нажмите чтобы выбрать PDF (до 50 МБ)';
+}
+
+async function addBook() {
+  const title = document.getElementById('f-title').value.trim();
+  const author = document.getElementById('f-author').value.trim();
+  const genre = document.getElementById('f-genre').value.trim();
+  const year = document.getElementById('f-year').value;
+  const description = document.getElementById('f-desc').value.trim();
+  const cover_url = document.getElementById('f-cover').value.trim();
+  const pdfFile = document.getElementById('f-pdf').files[0];
+  const msg = document.getElementById('form-msg');
+
+  if (!title || !author) {
+    msg.textContent = 'Заполните название и автора';
+    msg.className = 'form-msg error';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('title', title);
+  formData.append('author', author);
+  if (genre) formData.append('genre', genre);
+  if (year) formData.append('year', year);
+  if (description) formData.append('description', description);
+  if (cover_url) formData.append('cover_url', cover_url);
+  if (pdfFile) formData.append('pdf', pdfFile);
+
+  msg.textContent = 'Загрузка...';
+  msg.className = 'form-msg';
+
+  const res = await fetch(API, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${getToken()}` },
+    body: formData
+  });
+  const data = await res.json();
+  if (res.ok) {
+    msg.textContent = '✓ Книга успешно добавлена!';
+    msg.className = 'form-msg success';
+    ['f-title','f-author','f-genre','f-year','f-desc','f-cover'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('f-pdf').value = '';
+    document.getElementById('pdf-upload-text').textContent = 'Нажмите чтобы выбрать PDF (до 50 МБ)';
+    loadStats();
+  } else {
+    msg.textContent = data.error;
+    msg.className = 'form-msg error';
+  }
+}
+
+// ── USERS ─────────────────────────────────────────────
+async function loadAdminUsers() {
+  const res = await fetch(`${ADMIN_API}/users`, { headers: authHeaders() });
+  const users = await res.json();
+  document.getElementById('admin-users-list').innerHTML = `
+    <table class="admin-table">
+      <thead><tr><th>Имя</th><th>Email</th><th>Роль</th><th>Дата регистрации</th><th>Действия</th></tr></thead>
+      <tbody>
+        ${users.map(u => `
+          <tr>
+            <td>${u.username}</td>
+            <td>${u.email}</td>
+            <td>
+              <select onchange="changeUserRole(${u.id}, this.value)" ${u.id === currentUser?.id ? 'disabled' : ''}>
+                <option value="user" ${u.role === 'user' ? 'selected' : ''}>Пользователь</option>
+                <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Администратор</option>
+              </select>
+            </td>
+            <td>${new Date(u.created_at).toLocaleDateString('ru-RU')}</td>
+            <td>${u.id !== currentUser?.id ? `<button class="btn btn--danger btn--sm" onclick="deleteUser(${u.id})">Удалить</button>` : '—'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+async function changeUserRole(id, role) {
+  await fetch(`${ADMIN_API}/users/${id}/role`, {
+    method: 'PATCH', headers: authHeaders(),
+    body: JSON.stringify({ role })
+  });
+}
+
+async function deleteUser(id) {
+  if (!confirm('Удалить пользователя?')) return;
+  await fetch(`${ADMIN_API}/users/${id}`, { method: 'DELETE', headers: authHeaders() });
+  loadAdminUsers();
+  loadStats();
+}
+
+init();
+</script>
+</body>
+</html>
